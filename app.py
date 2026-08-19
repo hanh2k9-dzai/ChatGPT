@@ -1,19 +1,40 @@
-import os
+from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
+import os
 
-client = OpenAI(api_key=os.environ["sk-AJy-g5xdTiBPGoM7pIq3bA"])
+app = Flask(__name__)
 
-print("=== MY AI ===")
+client = OpenAI(
+    api_key=os.getenv("sk-AJy-g5xdTiBPGoM7pIq3bA")
+)
 
-while True:
-    message = input("Bạn: ")
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-    if message.lower() == "exit":
-        break
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json()
+    message = data.get("message", "").strip()
 
-    response = client.responses.create(
-        model="gpt-5.6-luna",
-        input=message
-    )
+    if not message:
+        return jsonify({"reply": "Bạn chưa nhập tin nhắn."})
 
-    print("AI:", response.output_text)
+    try:
+        response = client.responses.create(
+            model="gpt-5.6-luna",
+            input=message
+        )
+
+        return jsonify({
+            "reply": response.output_text
+        })
+
+    except Exception as e:
+        return jsonify({
+            "reply": f"Lỗi: {str(e)}"
+        }), 500
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
