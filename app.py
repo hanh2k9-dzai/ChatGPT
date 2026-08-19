@@ -1,4 +1,6 @@
 import os
+import time
+
 from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
 
@@ -6,16 +8,20 @@ app = Flask(__name__)
 
 API_KEY = os.environ.get("OPENAI_API_KEY")
 
-if API_KEY:
-    print("OPENROUTER API KEY: OK")
-else:
+if not API_KEY:
     print("ERROR: OPENAI_API_KEY chưa được thiết lập.")
+    client = None
+else:
+    print("OPENROUTER API KEY: OK")
+    client = OpenAI(
+        api_key=API_KEY,
+        base_url="https://openrouter.ai/api/v1",
+        timeout=45.0,
+        max_retries=2
+    )
 
-client = OpenAI(
-    api_key=API_KEY,
-    base_url="https://openrouter.ai/api/v1",
-    timeout=60.0
-) if API_KEY else None
+
+MODEL = "google/gemma-4-31b-it:free"
 
 
 @app.route("/")
@@ -28,7 +34,8 @@ def health():
     return jsonify({
         "status": "online",
         "api_key_configured": bool(API_KEY),
-        "provider": "OpenRouter"
+        "provider": "OpenRouter",
+        "model": MODEL
     })
 
 
@@ -36,7 +43,7 @@ def health():
 def chat():
     if client is None:
         return jsonify({
-            "error": "OpenRouter API key chưa được cấu hình."
+            "error": "OPENAI_API_KEY chưa được cấu hình trên Render."
         }), 500
 
     try:
@@ -49,7 +56,7 @@ def chat():
             }), 400
 
         response = client.chat.completions.create(
-            model="openrouter/free",
+            model=MODEL,
             messages=[
                 {
                     "role": "user",
@@ -61,6 +68,11 @@ def chat():
 
         reply = response.choices[0].message.content
 
+        if not reply:
+            return jsonify({
+                "error": "Model không trả về nội dung."
+            }), 502
+
         return jsonify({
             "reply": reply
         })
@@ -70,12 +82,25 @@ def chat():
 
         return jsonify({
             "error": str(e)
-        }), 500
+        }), 502
+
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({
+        "error": "Không tìm thấy đường dẫn."
+    }), 404
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({
+        "error": "Lỗi máy chủ."
+    }), 500
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-
     app.run(
         host="0.0.0.0",
         port=port
