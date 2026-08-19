@@ -6,15 +6,17 @@ app = Flask(__name__)
 
 API_KEY = os.environ.get("OPENAI_API_KEY")
 
-if API_KEY:
-    print("API KEY: OK")
+if not API_KEY:
+    print("ERROR: OPENAI_API_KEY chưa được thiết lập.")
+    client = None
 else:
-    print("API KEY: NOT FOUND")
+    print("OPENAI_API_KEY: OK")
 
-client = OpenAI(
-    api_key=API_KEY,
-    base_url="https://llm.thesparkdaily.com/v1"
-)
+    client = OpenAI(
+        api_key=API_KEY,
+        base_url="https://api.xkiro.com/v1",
+        timeout=60.0
+    )
 
 
 @app.route("/")
@@ -26,30 +28,36 @@ def home():
 def health():
     return jsonify({
         "status": "online",
-        "api_key": bool(API_KEY),
-        "endpoint": "https://llm.thesparkdaily.com/v1"
+        "api_key_configured": bool(API_KEY),
+        "provider": "xKiro"
     })
 
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    if client is None:
+        return jsonify({
+            "error": "API key chưa được cấu hình trên Render."
+        }), 500
+
     try:
-        data = request.get_json()
-        message = data.get("message", "").strip()
+        data = request.get_json(silent=True) or {}
+        message = str(data.get("message", "")).strip()
 
         if not message:
             return jsonify({
-                "error": "Chưa nhập tin nhắn."
+                "error": "Bạn chưa nhập tin nhắn."
             }), 400
 
         response = client.chat.completions.create(
-            model="GPT-5.4-MINI",
+            model="openai/gpt-5.6-sol",
             messages=[
                 {
                     "role": "user",
                     "content": message
                 }
-            ]
+            ],
+            temperature=0.7
         )
 
         reply = response.choices[0].message.content
