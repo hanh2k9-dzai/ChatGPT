@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>My AI</title>
 
     <style>
@@ -13,60 +12,59 @@
 
         body {
             margin: 0;
+            background: #f5f5f5;
             font-family: Arial, sans-serif;
-            background: #f7f7f8;
             height: 100vh;
             display: flex;
             flex-direction: column;
         }
 
         header {
-            height: 60px;
             background: white;
             border-bottom: 1px solid #ddd;
-            display: flex;
-            align-items: center;
-            padding: 0 18px;
-            font-size: 19px;
+            padding: 16px;
+            font-size: 20px;
             font-weight: bold;
         }
 
         #chat {
             flex: 1;
             overflow-y: auto;
-            padding: 20px 15px 100px;
+            padding: 15px;
         }
 
         .message {
             max-width: 850px;
-            margin: 0 auto 18px;
+            margin: 0 auto 15px;
             padding: 13px 16px;
             border-radius: 14px;
-            line-height: 1.5;
             white-space: pre-wrap;
+            line-height: 1.5;
         }
 
         .user {
-            background: #e5e5e5;
+            background: #ddd;
         }
 
         .ai {
             background: white;
-            border: 1px solid #e1e1e1;
+            border: 1px solid #ddd;
+        }
+
+        .error {
+            background: #ffe5e5;
+            color: #b00000;
+            border: 1px solid #ffb0b0;
         }
 
         .label {
             font-size: 12px;
             font-weight: bold;
-            margin-bottom: 5px;
             opacity: .6;
+            margin-bottom: 5px;
         }
 
         .input-area {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
             background: white;
             border-top: 1px solid #ddd;
             padding: 10px;
@@ -87,17 +85,15 @@
             padding: 12px;
             font-size: 16px;
             outline: none;
-            min-height: 48px;
         }
 
         button {
             border: none;
-            border-radius: 12px;
-            padding: 0 18px;
             background: #111;
             color: white;
+            border-radius: 12px;
+            padding: 0 18px;
             font-size: 15px;
-            cursor: pointer;
         }
 
         button:disabled {
@@ -115,94 +111,117 @@
 <div id="chat">
     <div class="message ai">
         <div class="label">MY AI</div>
-        Xin chào! Mình có thể giúp gì cho bạn?
+        Xin chào! Hãy gửi tin nhắn cho mình.
     </div>
 </div>
 
 <div class="input-area">
     <div class="input-box">
-        <textarea id="message"
-                  placeholder="Nhập tin nhắn..."
-                  rows="1"></textarea>
+        <textarea
+            id="message"
+            placeholder="Nhập tin nhắn..."
+            rows="1"
+        ></textarea>
 
         <button id="send">Gửi</button>
     </div>
 </div>
 
 <script>
-    const input = document.getElementById("message");
-    const button = document.getElementById("send");
-    const chat = document.getElementById("chat");
+const input = document.getElementById("message");
+const send = document.getElementById("send");
+const chat = document.getElementById("chat");
 
-    function addMessage(text, type, label) {
-        const div = document.createElement("div");
-        div.className = "message " + type;
+function addMessage(text, type, label) {
+    const box = document.createElement("div");
+    box.className = "message " + type;
 
-        const title = document.createElement("div");
-        title.className = "label";
-        title.textContent = label;
+    const title = document.createElement("div");
+    title.className = "label";
+    title.textContent = label;
 
-        const content = document.createElement("div");
-        content.textContent = text;
+    const content = document.createElement("div");
+    content.textContent = text;
 
-        div.appendChild(title);
-        div.appendChild(content);
+    box.appendChild(title);
+    box.appendChild(content);
 
-        chat.appendChild(div);
-        chat.scrollTop = chat.scrollHeight;
-    }
+    chat.appendChild(box);
+    chat.scrollTop = chat.scrollHeight;
+}
 
-    async function sendMessage() {
-        const message = input.value.trim();
+async function sendMessage() {
+    const message = input.value.trim();
 
-        if (!message) return;
+    if (!message) return;
 
-        addMessage(message, "user", "BẠN");
+    addMessage(message, "user", "BẠN");
 
-        input.value = "";
-        button.disabled = true;
-        button.textContent = "...";
+    input.value = "";
+    send.disabled = true;
+    send.textContent = "...";
+
+    try {
+        const response = await fetch("/chat", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message: message
+            })
+        });
+
+        const raw = await response.text();
+
+        console.log("SERVER STATUS:", response.status);
+        console.log("SERVER RESPONSE:", raw);
+
+        let data;
 
         try {
-            const response = await fetch("/chat", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    message: message
-                })
-            });
-
-            const data = await response.json();
-
-            addMessage(
-                data.reply || "AI không trả lời.",
-                "ai",
-                "MY AI"
-            );
-
-        } catch (error) {
-            addMessage(
-                "Không kết nối được với máy chủ.",
-                "ai",
-                "LỖI"
+            data = JSON.parse(raw);
+        } catch {
+            throw new Error(
+                "Server trả về dữ liệu không hợp lệ: " + raw
             );
         }
 
-        button.disabled = false;
-        button.textContent = "Gửi";
-        input.focus();
+        if (!response.ok) {
+            throw new Error(
+                data.error || "Server lỗi HTTP " + response.status
+            );
+        }
+
+        if (!data.reply) {
+            throw new Error("API không trả về nội dung.");
+        }
+
+        addMessage(data.reply, "ai", "MY AI");
+
+    } catch (error) {
+        console.error("CHAT ERROR:", error);
+
+        addMessage(
+            "LỖI: " + error.message,
+            "error",
+            "SYSTEM"
+        );
     }
 
-    button.addEventListener("click", sendMessage);
+    send.disabled = false;
+    send.textContent = "Gửi";
+    input.focus();
+}
 
-    input.addEventListener("keydown", function(event) {
-        if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            sendMessage();
-        }
-    });
+send.addEventListener("click", sendMessage);
+
+input.addEventListener("keydown", function(event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+});
 </script>
 
 </body>
