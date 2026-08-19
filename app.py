@@ -4,15 +4,17 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-# Kiểm tra API key nhưng không bao giờ in key ra log
 api_key = os.environ.get("OPENAI_API_KEY")
 
 if not api_key:
     print("ERROR: OPENAI_API_KEY chưa được thiết lập trên Render.")
+    client = None
 else:
     print("OPENAI_API_KEY: OK")
-
-client = OpenAI(api_key=api_key) if api_key else None
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://llm.thesparkdaily.com/v1"
+    )
 
 
 @app.route("/")
@@ -20,11 +22,19 @@ def home():
     return render_template("index.html")
 
 
+@app.route("/health")
+def health():
+    return jsonify({
+        "status": "online",
+        "api_key_configured": client is not None
+    })
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     if client is None:
         return jsonify({
-            "error": "Server chưa được cấu hình OPENAI_API_KEY."
+            "error": "API key chưa được cấu hình."
         }), 500
 
     try:
@@ -36,29 +46,28 @@ def chat():
                 "error": "Bạn chưa nhập tin nhắn."
             }), 400
 
-        response = client.responses.create(
-            model="gpt-5.6-luna",
-            input=message
+        response = client.chat.completions.create(
+            model="GPT-5.6-LUNA",
+            messages=[
+                {
+                    "role": "user",
+                    "content": message
+                }
+            ]
         )
 
+        reply = response.choices[0].message.content
+
         return jsonify({
-            "reply": response.output_text
+            "reply": reply
         })
 
     except Exception as e:
         print("CHAT ERROR:", str(e))
 
         return jsonify({
-            "error": "AI gặp lỗi khi xử lý yêu cầu."
+            "error": str(e)
         }), 500
-
-
-@app.route("/health")
-def health():
-    return jsonify({
-        "status": "online",
-        "api_key_configured": client is not None
-    })
 
 
 if __name__ == "__main__":
