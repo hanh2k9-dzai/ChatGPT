@@ -1,6 +1,4 @@
 import os
-import time
-
 from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
 
@@ -8,20 +6,25 @@ app = Flask(__name__)
 
 API_KEY = os.environ.get("OPENAI_API_KEY")
 
-if not API_KEY:
-    print("ERROR: OPENAI_API_KEY chưa được thiết lập.")
-    client = None
-else:
+MODELS = [
+    "google/gemma-4-31b-it:free",
+    "openai/gpt-oss-20b:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "openrouter/free"
+]
+
+if API_KEY:
     print("OPENROUTER API KEY: OK")
+
     client = OpenAI(
         api_key=API_KEY,
         base_url="https://openrouter.ai/api/v1",
         timeout=45.0,
-        max_retries=2
+        max_retries=0
     )
-
-
-MODEL = "google/gemma-4-31b-it:free"
+else:
+    print("ERROR: OPENAI_API_KEY chưa được thiết lập.")
+    client = None
 
 
 @app.route("/")
@@ -34,8 +37,7 @@ def health():
     return jsonify({
         "status": "online",
         "api_key_configured": bool(API_KEY),
-        "provider": "OpenRouter",
-        "model": MODEL
+        "provider": "OpenRouter"
     })
 
 
@@ -43,64 +45,61 @@ def health():
 def chat():
     if client is None:
         return jsonify({
-            "error": "OPENAI_API_KEY chưa được cấu hình trên Render."
+            "error": "OpenRouter API key chưa được cấu hình."
         }), 500
 
-    try:
-        data = request.get_json(silent=True) or {}
-        message = str(data.get("message", "")).strip()
+    data = request.get_json(silent=True) or {}
+    message = str(data.get("message", "")).strip()
 
-        if not message:
-            return jsonify({
-                "error": "Bạn chưa nhập tin nhắn."
-            }), 400
-
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": message
-                }
-            ],
-            temperature=0.7
-        )
-
-        reply = response.choices[0].message.content
-
-        if not reply:
-            return jsonify({
-                "error": "Model không trả về nội dung."
-            }), 502
-
+    if not message:
         return jsonify({
-            "reply": reply
-        })
+            "error": "Bạn chưa nhập tin nhắn."
+        }), 400
 
-    except Exception as e:
-        print("CHAT ERROR:", repr(e))
+    errors = []
 
-        return jsonify({
-            "error": str(e)
-        }), 502
+    for model in MODELS:
+        try:
+            print("Trying model:", model)
 
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": message
+                    }
+                ],
+                temperature=0.7
+            )
 
-@app.errorhandler(404)
-def not_found(error):
+            reply = response.choices[0].message.content
+
+            if reply:
+                print("SUCCESS:", model)
+
+                return jsonify({
+                    "reply": reply,
+                    "model": model
+                })
+
+        except Exception as e:
+            error_text = str(e)
+            print("MODEL ERROR:", model, error_text)
+            errors.append(f"{model}: {error_text}")
+
+            # thử model free tiếp theo
+            continue
+
     return jsonify({
-        "error": "Không tìm thấy đường dẫn."
-    }), 404
-
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({
-        "error": "Lỗi máy chủ."
-    }), 500
+        "error": "Tất cả model miễn phí hiện đều không phản hồi.",
+        "details": errors
+    }), 502
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+
     app.run(
         host="0.0.0.0",
         port=port
