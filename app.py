@@ -4,17 +4,17 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-api_key = os.environ.get("OPENAI_API_KEY")
+API_KEY = os.environ.get("OPENAI_API_KEY")
 
-if not api_key:
-    print("ERROR: OPENAI_API_KEY chưa được thiết lập trên Render.")
-    client = None
+if API_KEY:
+    print("API KEY: OK")
 else:
-    print("OPENAI_API_KEY: OK")
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://llm.thesparkdaily.com/v1"
-    )
+    print("API KEY: NOT FOUND")
+
+client = OpenAI(
+    api_key=API_KEY,
+    base_url="https://llm.thesparkdaily.com/v1"
+)
 
 
 @app.route("/")
@@ -26,28 +26,24 @@ def home():
 def health():
     return jsonify({
         "status": "online",
-        "api_key_configured": client is not None
+        "api_key": bool(API_KEY),
+        "endpoint": "https://llm.thesparkdaily.com/v1"
     })
 
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    if client is None:
-        return jsonify({
-            "error": "API key chưa được cấu hình."
-        }), 500
-
     try:
-        data = request.get_json(silent=True) or {}
-        message = str(data.get("message", "")).strip()
+        data = request.get_json()
+        message = data.get("message", "").strip()
 
         if not message:
             return jsonify({
-                "error": "Bạn chưa nhập tin nhắn."
+                "error": "Chưa nhập tin nhắn."
             }), 400
 
         response = client.chat.completions.create(
-            model="GPT-5.6-LUNA",
+            model="GPT-5.4-MINI",
             messages=[
                 {
                     "role": "user",
@@ -63,7 +59,7 @@ def chat():
         })
 
     except Exception as e:
-        print("CHAT ERROR:", str(e))
+        print("CHAT ERROR:", repr(e))
 
         return jsonify({
             "error": str(e)
