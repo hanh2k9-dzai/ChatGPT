@@ -1,24 +1,24 @@
+import os
 from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
-import os
 
 app = Flask(__name__)
 
 client = OpenAI(
-    api_key=os.getenv("sk-AJy-g5xdTiBPGoM7pIq3bA")
+    api_key=os.environ.get("OPENAI_API_KEY")
 )
 
 @app.route("/")
-def home():
+def index():
     return render_template("index.html")
+
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json()
-    message = data.get("message", "").strip()
+    message = request.form.get("message", "").strip()
 
     if not message:
-        return jsonify({"reply": "Bạn chưa nhập tin nhắn."})
+        return jsonify({"error": "Bạn chưa nhập tin nhắn"}), 400
 
     try:
         response = client.responses.create(
@@ -32,9 +32,12 @@ def chat():
 
     except Exception as e:
         return jsonify({
-            "reply": f"Lỗi: {str(e)}"
+            "error": str(e)
         }), 500
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000))
+    )
