@@ -6,17 +6,16 @@ app = Flask(__name__)
 
 API_KEY = os.environ.get("OPENAI_API_KEY")
 
-if not API_KEY:
-    print("ERROR: OPENAI_API_KEY chưa được thiết lập.")
-    client = None
+if API_KEY:
+    print("OPENROUTER API KEY: OK")
 else:
-    print("OPENAI_API_KEY: OK")
+    print("ERROR: OPENAI_API_KEY chưa được thiết lập.")
 
-    client = OpenAI(
-        api_key=API_KEY,
-        base_url="https://api.xkiro.com/v1",
-        timeout=60.0
-    )
+client = OpenAI(
+    api_key=API_KEY,
+    base_url="https://openrouter.ai/api/v1",
+    timeout=60.0
+) if API_KEY else None
 
 
 @app.route("/")
@@ -29,7 +28,7 @@ def health():
     return jsonify({
         "status": "online",
         "api_key_configured": bool(API_KEY),
-        "provider": "xKiro"
+        "provider": "OpenRouter"
     })
 
 
@@ -37,7 +36,7 @@ def health():
 def chat():
     if client is None:
         return jsonify({
-            "error": "API key chưa được cấu hình trên Render."
+            "error": "OpenRouter API key chưa được cấu hình."
         }), 500
 
     try:
@@ -50,7 +49,7 @@ def chat():
             }), 400
 
         response = client.chat.completions.create(
-            model="openai/gpt-5.6-sol",
+            model="openrouter/free",
             messages=[
                 {
                     "role": "user",
